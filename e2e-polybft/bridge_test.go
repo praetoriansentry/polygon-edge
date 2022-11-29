@@ -3,10 +3,12 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	rootchainHelper "github.com/0xPolygon/polygon-edge/command/rootchain/helper"
 	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/e2e-polybft/framework"
 	"github.com/0xPolygon/polygon-edge/helper/tests"
@@ -20,10 +22,14 @@ import (
 	ethgow "github.com/umbracle/ethgo/wallet"
 )
 
-var stateSyncResultEvent = abi.MustNewEvent(`event StateSyncResult(
+var (
+	stateSyncResultEvent = abi.MustNewEvent(`event StateSyncResult(
 		uint256 indexed counter,
 		uint8 indexed status,
 		bytes32 message)`)
+
+	currentCheckpointBlockNumMethod, _ = abi.NewMethod("function currentCheckpointBlockNumber() returns (uint256)")
+)
 
 type ResultEventStatus uint8
 
@@ -182,4 +188,28 @@ func TestE2E_Bridge_MainWorkflow(t *testing.T) {
 		func(_ int, status ResultEventStatus) bool {
 			return status == ResultEventSuccess
 		})
+}
+
+func TestE2E_CheckpointSubmission(t *testing.T) {
+	var (
+		rootchainSedner       = rootchainHelper.GetRootchainAdminKey().Address()
+		checkpointManagerAddr = ethgo.Address(rootchainHelper.CheckpointManagerAddress)
+	)
+
+	cluster := framework.NewTestCluster(t, 5, framework.WithBridge())
+	defer cluster.Stop()
+
+	// wait for a couple of blocks
+	require.NoError(t, cluster.WaitForBlock(15, 1*time.Minute))
+
+	checkpointBlockNumInput, err := currentCheckpointBlockNumMethod.Encode([]interface{}{})
+	require.NoError(t, err)
+
+	checkpointBlockNumRaw, err := rootchainHelper.Call(rootchainSedner, checkpointManagerAddr, checkpointBlockNumInput)
+	require.NoError(t, err)
+
+	latestCheckpointBlockNum, err := strconv.ParseUint(checkpointBlockNumRaw, 0, 64)
+	require.NoError(t, err)
+
+	require.Equal(t, 10, latestCheckpointBlockNum)
 }
