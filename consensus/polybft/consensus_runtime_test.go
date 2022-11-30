@@ -178,7 +178,7 @@ func TestConsensusRuntime_AddLog(t *testing.T) {
 	require.Equal(t, event.ID, stateSyncs[0].ID)
 }
 
-func TestConsensusRuntime_isEndOfEpoch_NotReachedEnd(t *testing.T) {
+func TestConsensusRuntime_isFixedSizeOfEpochMet_NotReachedEnd(t *testing.T) {
 	t.Parallel()
 
 	// because of slashing, we can assume some epochs started at random numbers
@@ -584,8 +584,9 @@ func TestConsensusRuntime_FSM_NotEndOfEpoch_NotEndOfSprint(t *testing.T) {
 			blockchain: blockchainMock,
 		},
 		epoch: &epochMetadata{
-			Number:     1,
-			Validators: validators.getPublicIdentities(),
+			Number:            1,
+			Validators:        validators.getPublicIdentities(),
+			FirstBlockInEpoch: 1,
 		},
 		lastBuiltBlock: lastBlock,
 		state:          state,
@@ -1016,8 +1017,9 @@ func TestConsensusRuntime_restartEpoch_SameEpochNumberAsTheLastOne(t *testing.T)
 			blockchain: blockchainMock,
 		},
 		epoch: &epochMetadata{
-			Number:     1,
-			Validators: validatorSet,
+			Number:            1,
+			Validators:        validatorSet,
+			FirstBlockInEpoch: 1,
 		},
 		lastBuiltBlock: &types.Header{
 			Number: originalBlockNumber,
@@ -1245,8 +1247,9 @@ func TestConsensusRuntime_restartEpoch_NewEpochToRun_BuildCommitment(t *testing.
 			polybftBackend:  polybftBackendMock,
 		},
 		epoch: &epochMetadata{
-			Number:     oldEpoch,
-			Validators: originalValidators.getPublicIdentities(),
+			Number:            oldEpoch,
+			Validators:        originalValidators.getPublicIdentities(),
+			FirstBlockInEpoch: 1,
 		},
 		lastBuiltBlock: header,
 	}
