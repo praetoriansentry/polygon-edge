@@ -12,7 +12,6 @@ import (
 	"github.com/0xPolygon/go-ibft/messages"
 	"github.com/0xPolygon/go-ibft/messages/proto"
 
-	"github.com/0xPolygon/polygon-edge/blockchain"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/bitmap"
 	bls "github.com/0xPolygon/polygon-edge/consensus/polybft/signer"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/wallet"
@@ -770,7 +769,7 @@ func (c *consensusRuntime) calculateUptime(currentBlock *types.Header, epoch *ep
 			return nil, err
 		}
 
-		blockHeader, blockExtra, err = c.getBlockData(blockHeader.Number - 1)
+		blockHeader, blockExtra, err = getBlockData(blockHeader.Number-1, c.config.blockchain)
 	}
 
 	// calculate uptime for blocks from previous epoch that were not processed in previous uptime
@@ -786,7 +785,7 @@ func (c *consensusRuntime) calculateUptime(currentBlock *types.Header, epoch *ep
 				return nil, err
 			}
 
-			blockHeader, blockExtra, err = c.getBlockData(blockHeader.Number - 1)
+			blockHeader, blockExtra, err = getBlockData(blockHeader.Number-1, c.config.blockchain)
 		}
 	}
 
@@ -1287,7 +1286,7 @@ func (c *consensusRuntime) getFirstBlockOfEpoch(epochNumber uint64, latestHeader
 
 	for blockExtra.Checkpoint.EpochNumber == epoch {
 		firstBlockInEpoch = blockHeader.Number
-		blockHeader, blockExtra, err = c.getBlockData(blockHeader.Number - 1)
+		blockHeader, blockExtra, err = getBlockData(blockHeader.Number-1, c.config.blockchain)
 
 		if err != nil {
 			return 0, err
@@ -1295,21 +1294,6 @@ func (c *consensusRuntime) getFirstBlockOfEpoch(epochNumber uint64, latestHeader
 	}
 
 	return firstBlockInEpoch, nil
-}
-
-// getBlockData returns block header and extra
-func (c *consensusRuntime) getBlockData(blockNumber uint64) (*types.Header, *Extra, error) {
-	blockHeader, found := c.config.blockchain.GetHeaderByNumber(blockNumber)
-	if !found {
-		return nil, nil, blockchain.ErrNoBlock
-	}
-
-	blockExtra, err := GetIbftExtra(blockHeader.ExtraData)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return blockHeader, blockExtra, nil
 }
 
 // validateVote validates if the senders address is in active validator set
