@@ -2,6 +2,7 @@ package signer
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/types"
@@ -123,6 +124,7 @@ func (s *SignerImpl) GetIBFTExtra(header *types.Header) (*IstanbulExtra, error) 
 		extra.ParentCommittedSeals = s.parentKeyManager.NewEmptyCommittedSeals()
 	}
 
+	fmt.Printf("all: %v \n cropped: %v \n iev: %d", header.ExtraData, data, IstanbulExtraVanity)
 	if err := extra.UnmarshalRLP(data); err != nil {
 		return nil, err
 	}
