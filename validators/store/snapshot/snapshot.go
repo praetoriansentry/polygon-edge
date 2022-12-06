@@ -133,7 +133,7 @@ func (s *SnapshotValidatorStore) initialize() error {
 	// Process headers if we missed some blocks in the current epoch
 	if header.Number > meta.LastBlock {
 		s.logger.Info("syncing past snapshots", "from", meta.LastBlock, "to", header.Number)
-
+		s.logger.Error("DOWN HERE")
 		if err := s.ProcessHeadersInRange(meta.LastBlock+1, header.Number); err != nil {
 			return err
 		}
@@ -186,9 +186,9 @@ func (s *SnapshotValidatorStore) Votes(height uint64) ([]*store.Vote, error) {
 
 // UpdateValidatorSet resets Snapshot with given validators at specified height
 func (s *SnapshotValidatorStore) UpdateValidatorSet(
-	// new validators to be overwritten
+// new validators to be overwritten
 	newValidators validators.Validators,
-	// the height from which new validators are used
+// the height from which new validators are used
 	fromHeight uint64,
 ) error {
 	snapshotHeight := fromHeight - 1
