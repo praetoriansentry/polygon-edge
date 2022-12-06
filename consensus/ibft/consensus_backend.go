@@ -161,6 +161,7 @@ func (i *backendIBFT) buildBlock(parent *types.Header) (*types.Block, error) {
 	potentialTimestamp := i.calcHeaderTimestamp(parent.Timestamp, time.Now())
 	header.Timestamp = uint64(potentialTimestamp.Unix())
 
+	i.logger.Error("HERE?")
 	parentCommittedSeals, err := i.extractParentCommittedSeals(parent)
 	if err != nil {
 		return nil, err
