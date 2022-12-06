@@ -56,6 +56,8 @@ func (i *backendIBFT) InsertBlock(
 		committedSealsMap[types.BytesToAddress(cm.Signer)] = cm.Signature
 	}
 
+	i.logger.Debug(fmt.Sprintf("BEFORE: %v", newBlock.Header.ExtraData))
+
 	// Push the committed seals to the header
 	header, err := i.currentSigner.WriteCommittedSeals(newBlock.Header, committedSealsMap)
 	if err != nil {
@@ -63,6 +65,8 @@ func (i *backendIBFT) InsertBlock(
 
 		return
 	}
+
+	i.logger.Debug(fmt.Sprintf("AFTER: %v", header.ExtraData))
 
 	newBlock.Header = header
 

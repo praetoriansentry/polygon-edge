@@ -154,10 +154,10 @@ func putIbftExtra(h *types.Header, istanbulExtra *IstanbulExtra) {
 func packFieldsIntoExtra(
 	extraBytes []byte,
 	packFn func(
-		ar *fastrlp.Arena,
-		oldValues []*fastrlp.Value,
-		newArrayValue *fastrlp.Value,
-	) error,
+	ar *fastrlp.Arena,
+	oldValues []*fastrlp.Value,
+	newArrayValue *fastrlp.Value,
+) error,
 ) []byte {
 	extraHeader := extraBytes[:IstanbulExtraVanity]
 	extraBody := extraBytes[IstanbulExtraVanity:]
@@ -166,14 +166,19 @@ func packFieldsIntoExtra(
 		vv := ar.NewArray()
 
 		_ = types.UnmarshalRlp(func(p *fastrlp.Parser, v *fastrlp.Value) error {
+			fmt.Println("IM HERE AND NOT HAPPY")
 			elems, err := v.GetElems()
 			if err != nil {
 				return err
 			}
 
+			fmt.Println("STILL HERE AND NOT HAPPY")
+
 			if len(elems) < 3 {
 				return fmt.Errorf("incorrect number of elements to decode istambul extra, expected 3 but found %d", len(elems))
 			}
+
+			fmt.Println("STILL STILL HERE AND NOT HAPPY")
 
 			return packFn(ar, elems, vv)
 		}, extraBody)
