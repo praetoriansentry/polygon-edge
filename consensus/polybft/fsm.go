@@ -84,6 +84,7 @@ type fsm struct {
 // BuildProposal builds a proposal for the current round (used if proposer)
 func (f *fsm) BuildProposal(currentRound uint64) ([]byte, error) {
 	parent := f.parent
+	buildStart := time.Now()
 
 	extraParent, err := GetIbftExtra(parent.ExtraData)
 	if err != nil {
@@ -180,7 +181,8 @@ func (f *fsm) BuildProposal(currentRound uint64) ([]byte, error) {
 
 	f.logger.Debug("[FSM Build Proposal]",
 		"txs", len(stateBlock.Block.Transactions),
-		"hash", checkpointHash.String())
+		"hash", checkpointHash.String(),
+		"buildtime", time.Since(buildStart))
 
 	return stateBlock.Block.MarshalRLP(), nil
 }
