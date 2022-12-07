@@ -1,6 +1,7 @@
 package polybft
 
 import (
+	"sync"
 	"time"
 
 	"github.com/0xPolygon/polygon-edge/consensus"
@@ -162,26 +163,35 @@ func (b *BlockBuilder) WriteTx(tx *types.Transaction) error {
 
 // Fill fills the block with transactions from the txpool
 func (b *BlockBuilder) Fill() {
-	stopTime := time.Now().Add(b.params.BlockTime)
-
 	b.params.TxPool.Prepare()
-	for {
-		if time.Now().After(stopTime) {
-			break
-		}
-		tx := b.params.TxPool.Peek()
 
-		// execute transactions one by one
-		_, err := b.writeTxPoolTransaction(tx)
-		if err != nil {
-			b.params.Logger.Debug("Fill transaction error", "hash", tx.Hash, "err", err)
-		}
+	shouldStop := false
+	var wg sync.WaitGroup
+	wg.Add(1)
+	deadline := time.NewTimer(b.params.BlockTime)
 
-		if err == txpool.ErrBlockLimitExceeded {
-			break
-		}
+	go func() {
+		for {
+			if shouldStop {
+				break
+			}
+			tx := b.params.TxPool.Peek()
 
-	}
+			// execute transactions one by one
+			_, err := b.writeTxPoolTransaction(tx)
+			if err != nil {
+				b.params.Logger.Debug("Fill transaction error", "hash", tx.Hash, "err", err)
+			}
+
+			if err == txpool.ErrBlockLimitExceeded {
+				break
+			}
+		}
+		wg.Done()
+	}()
+	<-deadline.C
+	shouldStop = true
+	wg.Wait()
 
 }
 
