@@ -176,6 +176,11 @@ func (b *BlockBuilder) Fill() {
 		if err != nil {
 			b.params.Logger.Debug("Fill transaction error", "hash", tx.Hash, "err", err)
 		}
+
+		if err == txpool.ErrBlockLimitExceeded {
+			break
+		}
+
 	}
 
 }
