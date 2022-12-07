@@ -46,12 +46,7 @@ type ProposerCalculator interface {
 	GetLatestProposer(round uint64) (types.Address, bool)
 }
 
-type validatorCalcMetadata struct {
-	Metadata         *ValidatorMetadata
-	ProposerPriority int64
-}
-
-func (a validatorCalcMetadata) IsBetter(b *validatorCalcMetadata) bool {
+func isBetterProposer(a, b *ProposerCalculatorValidator) bool {
 	if b == nil || a.ProposerPriority > b.ProposerPriority {
 		return true
 	} else if a.ProposerPriority == b.ProposerPriority {
@@ -61,26 +56,15 @@ func (a validatorCalcMetadata) IsBetter(b *validatorCalcMetadata) bool {
 	}
 }
 
-// newValidatorCalcMetadata returns a new validator with the given pubkey and voting power.
-func newValidatorCalcMetadata(metadata *ValidatorMetadata, priority int64) *validatorCalcMetadata {
-	return &validatorCalcMetadata{
-		Metadata:         metadata,
-		ProposerPriority: priority,
-	}
-}
-
 type proposerCalculator struct {
-	// validators represents current list of validators with their priority
-	validators []*validatorCalcMetadata
-
-	// proposer of a block
-	proposer *validatorCalcMetadata
-
-	// current proposer is calculated in this round - optimization
-	round uint64
+	// snapshot data
+	data *ProposerCalculatorSnapshot
 
 	// total voting power
 	totalVotingPower int64
+
+	// proposer calculator validator
+	proposer *ProposerCalculatorValidator
 
 	// rw mutex
 	lock *sync.RWMutex
@@ -90,17 +74,16 @@ type proposerCalculator struct {
 }
 
 // NewProposerCalculator creates a new proposer calculator object.
-func NewProposerCalculator(valz AccountSet, totalVotingPower int64, logger hclog.Logger) (*proposerCalculator, error) {
-	var validators = make([]*validatorCalcMetadata, len(valz))
-	for i, v := range valz {
-		validators[i] = newValidatorCalcMetadata(v, 0)
+func NewProposerCalculator(data *ProposerCalculatorSnapshot, logger hclog.Logger) (*proposerCalculator, error) {
+	totalVotingPower := int64(0)
+	for _, v := range data.Validators {
+		totalVotingPower = safeAddClip(totalVotingPower, int64(v.Metadata.VotingPower))
 	}
 
 	proposerCalc := &proposerCalculator{
 		totalVotingPower: totalVotingPower,
-		validators:       validators,
 		lock:             &sync.RWMutex{},
-		round:            0,
+		data:             data,
 		logger:           logger.Named("validator_set"),
 	}
 
@@ -117,7 +100,7 @@ func (pc proposerCalculator) GetLatestProposer(round uint64) (types.Address, boo
 	defer pc.lock.RUnlock()
 
 	// round must be same as saved one and proposer must exist
-	if pc.proposer == nil || pc.round != round {
+	if pc.proposer == nil || pc.data.Round != round {
 		return types.ZeroAddress, false
 	}
 
@@ -129,7 +112,7 @@ func (pc *proposerCalculator) CalcProposer(round uint64) (types.Address, error) 
 	// optimization -> return current proposer if already calculated for this round
 	pc.lock.RLock()
 	currentProposer := pc.proposer
-	isSameRound := round == pc.round && currentProposer != nil
+	isSameRound := round == pc.data.Round && currentProposer != nil
 	pc.lock.RUnlock()
 
 	if isSameRound {
@@ -156,7 +139,7 @@ func (pc *proposerCalculator) CalcProposer(round uint64) (types.Address, error) 
 	// keep proposer in the original validator set
 	pc.lock.Lock()
 	pc.proposer = proposer
-	pc.round = round
+	pc.data.Round = round
 	pc.lock.Unlock()
 
 	return proposer.Metadata.Address, nil
@@ -165,7 +148,7 @@ func (pc *proposerCalculator) CalcProposer(round uint64) (types.Address, error) 
 // IncrementProposerPriority increments ProposerPriority of each validator and
 // updates the proposer.
 func (pc *proposerCalculator) IncrementProposerPriority(times uint64) error {
-	if len(pc.validators) == 0 {
+	if len(pc.data.Validators) == 0 {
 		return fmt.Errorf("validator set cannot be nul or empty")
 	}
 
@@ -182,7 +165,7 @@ func (pc *proposerCalculator) IncrementProposerPriority(times uint64) error {
 	}
 
 	var (
-		proposer *validatorCalcMetadata
+		proposer *ProposerCalculatorValidator
 		err      error
 	)
 
@@ -199,8 +182,8 @@ func (pc *proposerCalculator) IncrementProposerPriority(times uint64) error {
 	return nil
 }
 
-func (pc *proposerCalculator) incrementProposerPriority() (*validatorCalcMetadata, error) {
-	for _, val := range pc.validators {
+func (pc *proposerCalculator) incrementProposerPriority() (*ProposerCalculatorValidator, error) {
+	for _, val := range pc.data.Validators {
 		// Check for overflow for sum.
 		newPrio := safeAddClip(val.ProposerPriority, int64(val.Metadata.VotingPower))
 		val.ProposerPriority = newPrio
@@ -234,22 +217,22 @@ func (pc *proposerCalculator) shiftByAvgProposerPriority() error {
 		return fmt.Errorf("cannot compute proposer priority: %w", err)
 	}
 
-	for _, val := range pc.validators {
+	for _, val := range pc.data.Validators {
 		val.ProposerPriority = safeSubClip(val.ProposerPriority, avgProposerPriority)
 	}
 
 	return nil
 }
 
-func (pc *proposerCalculator) getValWithMostPriority() (result *validatorCalcMetadata, err error) {
-	if len(pc.validators) == 0 {
+func (pc *proposerCalculator) getValWithMostPriority() (result *ProposerCalculatorValidator, err error) {
+	if len(pc.data.Validators) == 0 {
 		return nil, fmt.Errorf("validators cannot be nil or empty")
 	}
 
-	for _, curr := range pc.validators {
+	for _, curr := range pc.data.Validators {
 		// pick curr as result if it has greater priority
 		// or if it has same priority but "smaller" address
-		if curr.IsBetter(result) {
+		if isBetterProposer(curr, result) {
 			result = curr
 		}
 	}
@@ -258,14 +241,14 @@ func (pc *proposerCalculator) getValWithMostPriority() (result *validatorCalcMet
 }
 
 func (pc *proposerCalculator) computeAvgProposerPriority() (int64, error) {
-	if len(pc.validators) == 0 {
+	if len(pc.data.Validators) == 0 {
 		return 0, fmt.Errorf("validator set cannot be nul or empty")
 	}
 
-	n := int64(len(pc.validators))
+	n := int64(len(pc.data.Validators))
 	sum := big.NewInt(0)
 
-	for _, val := range pc.validators {
+	for _, val := range pc.data.Validators {
 		sum.Add(sum, big.NewInt(val.ProposerPriority))
 	}
 
@@ -280,7 +263,7 @@ func (pc *proposerCalculator) computeAvgProposerPriority() (int64, error) {
 // rescalePriorities rescales the priorities such that the distance between the
 // maximum and minimum is smaller than `diffMax`.
 func (pc *proposerCalculator) rescalePriorities() error {
-	if len(pc.validators) == 0 {
+	if len(pc.data.Validators) == 0 {
 		return fmt.Errorf("validator set cannot be nul or empty")
 	}
 
@@ -292,11 +275,11 @@ func (pc *proposerCalculator) rescalePriorities() error {
 	// Calculating ceil(diff/diffMax):
 	// Re-normalization is performed by dividing by an integer for simplicity.
 	// NOTE: This may make debugging priority issues easier as well.
-	diff := computeMaxMinPriorityDiff(pc.validators)
+	diff := computeMaxMinPriorityDiff(pc.data.Validators)
 	ratio := (diff + diffMax - 1) / diffMax
 
 	if diff > diffMax {
-		for _, val := range pc.validators {
+		for _, val := range pc.data.Validators {
 			val.ProposerPriority /= ratio
 		}
 	}
@@ -309,25 +292,17 @@ func (pc proposerCalculator) Copy() *proposerCalculator {
 	pc.lock.RLock()
 	defer pc.lock.RUnlock()
 
-	proposer := pc.proposer
-
-	valCopy := make([]*validatorCalcMetadata, len(pc.validators))
-	for i, val := range pc.validators {
-		valCopy[i] = newValidatorCalcMetadata(val.Metadata, val.ProposerPriority)
-	}
-
 	return &proposerCalculator{
-		validators:       valCopy,
-		proposer:         proposer,
+		proposer:         pc.proposer,
 		lock:             &sync.RWMutex{},
 		totalVotingPower: pc.totalVotingPower,
-		round:            pc.round,
+		data:             pc.data.Copy(),
 		logger:           pc.logger,
 	}
 }
 
 // computeMaxMinPriorityDiff computes the difference between the max and min ProposerPriority of that set.
-func computeMaxMinPriorityDiff(validators []*validatorCalcMetadata) int64 {
+func computeMaxMinPriorityDiff(validators []*ProposerCalculatorValidator) int64 {
 	max := int64(math.MinInt64)
 	min := int64(math.MaxInt64)
 
