@@ -162,31 +162,22 @@ func (b *BlockBuilder) WriteTx(tx *types.Transaction) error {
 
 // Fill fills the block with transactions from the txpool
 func (b *BlockBuilder) Fill() {
-	blockTimer := time.NewTimer(b.params.BlockTime)
+	stopTime := time.Now().Add(b.params.BlockTime)
 
 	b.params.TxPool.Prepare()
-write:
 	for {
-		select {
-		case <-blockTimer.C:
-			return
-		default:
-			tx := b.params.TxPool.Peek()
+		if time.Now().After(stopTime) {
+			break
+		}
+		tx := b.params.TxPool.Peek()
 
-			// execute transactions one by one
-			finished, err := b.writeTxPoolTransaction(tx)
-			if err != nil {
-				b.params.Logger.Debug("Fill transaction error", "hash", tx.Hash, "err", err)
-			}
-
-			if finished {
-				break write
-			}
+		// execute transactions one by one
+		_, err := b.writeTxPoolTransaction(tx)
+		if err != nil {
+			b.params.Logger.Debug("Fill transaction error", "hash", tx.Hash, "err", err)
 		}
 	}
 
-	//	wait for the timer to expire
-	<-blockTimer.C
 }
 
 // Receipts returns the collection of transaction receipts for given block
