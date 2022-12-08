@@ -1089,7 +1089,7 @@ func (c *consensusRuntime) InsertBlock(proposal []byte, committedSeals []*messag
 
 	startInsert := time.Now()
 	block, err := fsm.Insert(proposal, committedSeals)
-	c.logger.Debug("inserted block",
+	c.logger.Info("inserted new block",
 		"blockInsertTime", time.Since(startInsert))
 	if err != nil {
 		c.logger.Error("cannot insert proposal", "error", err)
