@@ -6,6 +6,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha1"
 	"errors"
 	"fmt"
 	"hash"
@@ -17,6 +18,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/coinbase/kryptology/pkg/signatures/bls/bls_sig"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/umbracle/fastrlp"
 	"golang.org/x/crypto/sha3"
 )
@@ -27,6 +29,9 @@ var (
 
 // S256 is the secp256k1 elliptic curve
 var S256 = btcec.S256()
+
+// as long as the size is positive there shouldn't be an error in constructor
+var keyCache, _ = lru.New(256)
 
 var (
 	secp256k1N = hex.MustDecodeHex("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141")
@@ -160,6 +165,13 @@ func Ecrecover(hash, sig []byte) ([]byte, error) {
 // RecoverPubkey verifies the compact signature "signature" of "hash" for the
 // secp256k1 curve.
 func RecoverPubkey(signature, hash []byte) (*ecdsa.PublicKey, error) {
+	cacheKeySha := sha1.Sum(append(signature, hash...))
+	cacheKey := fmt.Sprintf("%x", cacheKeySha)
+	pk, ok := keyCache.Get(cacheKey)
+	if ok {
+		return pk.(*ecdsa.PublicKey), nil
+	}
+
 	size := len(signature)
 	term := byte(27)
 
@@ -178,8 +190,9 @@ func RecoverPubkey(signature, hash []byte) (*ecdsa.PublicKey, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	return pub.ToECDSA(), nil
+	pubK := pub.ToECDSA()
+	keyCache.Add(cacheKey, pubK)
+	return pubK, nil
 }
 
 // Sign produces a compact signature of the data in hash with the given
