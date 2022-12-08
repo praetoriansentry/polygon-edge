@@ -8,6 +8,7 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/0xPolygon/go-ibft/messages"
 	"github.com/0xPolygon/go-ibft/messages/proto"
@@ -1086,7 +1087,10 @@ func (c *consensusRuntime) BuildProposal(view *proto.View) []byte {
 func (c *consensusRuntime) InsertBlock(proposal []byte, committedSeals []*messages.CommittedSeal) {
 	fsm := c.fsm
 
+	startInsert := time.Now()
 	block, err := fsm.Insert(proposal, committedSeals)
+	c.logger.Debug("inserted block",
+		"blockInsertTime", time.Since(startInsert))
 	if err != nil {
 		c.logger.Error("cannot insert proposal", "error", err)
 
