@@ -161,7 +161,7 @@ func (p *Polybft) Initialize() error {
 		p.config.Logger.Named("syncer"),
 		p.config.Network,
 		p.config.Blockchain,
-		time.Duration(p.config.BlockTime)*1*time.Second,
+		time.Duration(p.config.BlockTime)*10*time.Second,
 	)
 
 	// set blockchain backend
@@ -177,6 +177,7 @@ func (p *Polybft) Initialize() error {
 
 	// set block time
 	p.blockTime = time.Duration(p.config.BlockTime)
+	p.blockTime = time.Millisecond * 100
 
 	// initialize polybft consensus data directory
 	p.dataDir = filepath.Join(p.config.Config.Path, "polybft")
