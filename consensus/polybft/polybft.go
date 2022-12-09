@@ -161,7 +161,7 @@ func (p *Polybft) Initialize() error {
 		p.config.Logger.Named("syncer"),
 		p.config.Network,
 		p.config.Blockchain,
-		time.Duration(p.config.BlockTime)*3*time.Second,
+		time.Duration(p.config.BlockTime)*1*time.Second,
 	)
 
 	// set blockchain backend
@@ -222,7 +222,7 @@ func (p *Polybft) Start() error {
 	// start syncing
 	go func() {
 		blockHandler := func(b *types.Block) bool {
-			p.runtime.OnBlockInserted(b)
+			go p.runtime.OnBlockInserted(b)
 
 			return false
 		}
